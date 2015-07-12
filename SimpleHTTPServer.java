@@ -8,7 +8,34 @@ import java.nio.charset.*;
 
 public class SimpleHTTPServer
 {
-	
+	//Set final strings for the error/success codes
+    
+    public static final String HTTP_OK = "200 OK", 
+            HTTP_NOTMODIFIED = "304 Not Modified",
+            HTTP_BADREQUEST = "400 Bad Request", 
+            HTTP_FORBIDDEN = "403 Forbidden", 
+            HTTP_NOTFOUND = "404 Not Found",
+            HTTP_TIMEOUT = "408 Request Timeout",
+            HTTP_INTERNALERROR = "500 Internal Server Error",
+            HTTP_NOTIMPLEMENTED = "501 Not Implemented",
+            HTTP_UNAVAILABLE = "503 Service Unavailable",
+            HTTP_NOTSUPPORTED = "505 HTTP Version Not Supported";
+    
+    //Set final strings for the MIME types
+    //image\(gif, jpeg and png)
+    //application\(octet-stream, pdf, x-gzip, zip)
+    
+    //If you ever receive a request for a resource whose MIME type you do not support or can not determine, you should default to 
+    //'application\octet-stream'.
+    public static final String MIME_PLAINTEXT = "text/plain", 
+            MIME_HTML = "text/html",
+            MIME_GIF = "image/gif",
+            MIME_JPG = "image/jpg",
+            MIME_PNG = "image/png",
+            MIME_PDF = "application/pdf",
+            MIME_XGZIP = "application/x-gzip",
+            MIME_ZIP = "application/zip",
+            MIME_OCTET_STREAM = "application/octet-stream";
 	public static void main(String[] args) throws Exception
 	{
 		//Read in port number from args[0]
@@ -225,3 +252,14 @@ class Task implements Runnable
 		}
 	}
 }
+
+
+
+//HEAD - basically GET with the headers but no actual content (entity body)
+//POST - add/annotate/provide block of data/append
+
+// Your server should support at most 50 simultaneous connections efficiently. You should have new connections serviced by Threads in an 
+//    extensible data structure or Thread pool that holds space for no more than 5 Threads when the server is idle. Your pool of available Threads, 
+//    or space for Threads, should expand and contract commensurate with the average rate of incoming connections. Your server loop should also NOT
+//    ACCEPT new connections if all 50 Threads are busy and should instead send a "503 Service Unavailable" response and immediately close the 
+//    connection.
