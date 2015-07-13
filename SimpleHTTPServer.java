@@ -8,7 +8,34 @@ import java.nio.charset.*;
 
 public class SimpleHTTPServer
 {
-	
+	//Set final strings for the error/success codes
+    
+    public static final String HTTP_OK = "200 OK", 
+            HTTP_NOTMODIFIED = "304 Not Modified",
+            HTTP_BADREQUEST = "400 Bad Request", 
+            HTTP_FORBIDDEN = "403 Forbidden", 
+            HTTP_NOTFOUND = "404 Not Found",
+            HTTP_TIMEOUT = "408 Request Timeout",
+            HTTP_INTERNALERROR = "500 Internal Server Error",
+            HTTP_NOTIMPLEMENTED = "501 Not Implemented",
+            HTTP_UNAVAILABLE = "503 Service Unavailable",
+            HTTP_NOTSUPPORTED = "505 HTTP Version Not Supported";
+    
+    //Set final strings for the MIME types
+    //image\(gif, jpeg and png)
+    //application\(octet-stream, pdf, x-gzip, zip)
+    
+    //If you ever receive a request for a resource whose MIME type you do not support or can not determine, you should default to 
+    //'application\octet-stream'.
+    public static final String MIME_PLAINTEXT = "text/plain", 
+            MIME_HTML = "text/html",
+            MIME_GIF = "image/gif",
+            MIME_JPG = "image/jpg",
+            MIME_PNG = "image/png",
+            MIME_PDF = "application/pdf",
+            MIME_XGZIP = "application/x-gzip",
+            MIME_ZIP = "application/zip",
+            MIME_OCTET_STREAM = "application/octet-stream";
 	public static void main(String[] args) throws Exception
 	{
 		//Read in port number from args[0]
@@ -225,3 +252,177 @@ class Task implements Runnable
 		}
 	}
 }
+
+
+
+//HEAD - basically GET with the headers but no actual content (entity body)
+//POST - add/annotate/provide block of data/append
+
+// Your server should support at most 50 simultaneous connections efficiently. You should have new connections serviced by Threads in an 
+//    extensible data structure or Thread pool that holds space for no more than 5 Threads when the server is idle. Your pool of available Threads, 
+//    or space for Threads, should expand and contract commensurate with the average rate of incoming connections. Your server loop should also NOT
+//    ACCEPT new connections if all 50 Threads are busy and should instead send a "503 Service Unavailable" response and immediately close the 
+//    connection.
+
+
+/* to help understand the pool of threads, we should understand this example
+public class SimpleThreadPool {
+07
+ 
+08
+    public static void main(String[] args) {
+09
+        ExecutorService executor = Executors.newFixedThreadPool(5);
+10
+        for (int i = 0; i < 10; i++) {
+11
+            Runnable worker = new WorkerThread('' + i);
+12
+            executor.execute(worker);
+13
+          }
+14
+        executor.shutdown();
+15
+        while (!executor.isTerminated()) {
+16
+        }
+17
+        System.out.println('Finished all threads');
+18
+    }
+19
+ 
+20
+}
+public class WorkerPool {
+10
+ 
+11
+    public static void main(String args[]) throws InterruptedException{
+12
+        //RejectedExecutionHandler implementation
+13
+        RejectedExecutionHandlerImpl rejectionHandler = new RejectedExecutionHandlerImpl();
+14
+        //Get the ThreadFactory implementation to use
+15
+        ThreadFactory threadFactory = Executors.defaultThreadFactory();
+16
+        //creating the ThreadPoolExecutor
+17
+        ThreadPoolExecutor executorPool = new ThreadPoolExecutor(2, 4, 10, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(2), threadFactory, rejectionHandler);
+18
+        //start the monitoring thread
+19
+        MyMonitorThread monitor = new MyMonitorThread(executorPool, 3);
+20
+        Thread monitorThread = new Thread(monitor);
+21
+        monitorThread.start();
+22
+        //submit work to the thread pool
+23
+        for(int i=0; i<10; i++){
+24
+            executorPool.execute(new WorkerThread('cmd'+i));
+25
+        }
+26
+ 
+27
+        Thread.sleep(30000);
+28
+        //shut down the pool
+29
+        executorPool.shutdown();
+30
+        //shut down the monitor thread
+31
+        Thread.sleep(5000);
+32
+        monitor.shutdown();
+33
+ 
+34
+    }
+public class MyMonitorThread implements Runnable
+06
+{
+07
+    private ThreadPoolExecutor executor;
+08
+ 
+09
+    private int seconds;
+10
+ 
+11
+    private boolean run=true;
+12
+ 
+13
+    public MyMonitorThread(ThreadPoolExecutor executor, int delay)
+14
+    {
+15
+        this.executor = executor;
+16
+        this.seconds=delay;
+17
+    }
+18
+ 
+19
+    public void shutdown(){
+20
+        this.run=false;
+21
+    }
+22
+ 
+23
+    @Override
+24
+    public void run()
+25
+    {
+26
+        while(run){
+27
+                System.out.println(
+28
+                    String.format('[monitor] [%d/%d] Active: %d, Completed: %d, Task: %d, isShutdown: %s, isTerminated: %s',
+29
+                        this.executor.getPoolSize(),
+30
+                        this.executor.getCorePoolSize(),
+31
+                        this.executor.getActiveCount(),
+32
+                        this.executor.getCompletedTaskCount(),
+33
+                        this.executor.getTaskCount(),
+34
+                        this.executor.isShutdown(),
+35
+                        this.executor.isTerminated()));
+36
+                try {
+37
+                    Thread.sleep(seconds*1000);
+38
+                } catch (InterruptedException e) {
+39
+                    e.printStackTrace();
+40
+                }
+41
+        }
+42
+ 
+43
+    }
+44
+}
+*/
