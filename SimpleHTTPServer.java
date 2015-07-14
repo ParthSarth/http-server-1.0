@@ -116,7 +116,7 @@ class Task implements Runnable
 		try 
 		{
 			//instantiate I/O streams and set connection timeout
-			csocket.setSoTimeout(3000);
+			//csocket.setSoTimeout(3000);
 			outToClient = new DataOutputStream(csocket.getOutputStream());
 	        inFromClient = new BufferedReader
 	     			(new InputStreamReader(csocket.getInputStream()));
@@ -177,17 +177,36 @@ class Task implements Runnable
 		String[] tokens = request.split(delims);
 		String command = "badcommand";
 		String resource = "badresource";
-		if(tokens.length==2)
+		String version = "badversion";
+		float vers;
+		if(tokens.length==3)
 		{
 		command = tokens[0];
 		resource = tokens[1];
+		version = tokens[2];
 		}
 		//Check for proper formatting.
-		if(tokens.length != 2 || !resource.startsWith("/") || !command.equals(command.toUpperCase()))
+		if(tokens.length != 3 || !resource.startsWith("/") || !command.equals(command.toUpperCase()) || !version.substring(0,5).equals("HTTP\\"))
 		{
 			//bad formatting: request does not consist of one command and one resource
 			// or the resource doesn't start with a '/'
 			return "400 Bad Request";
+		}
+		try
+		{
+			vers = Float.parseFloat(version.substring(version.length()-3));
+			System.out.println(vers);
+		}
+		catch(NumberFormatException except)
+		{
+			System.out.println("Error in parsing version: " + except.getMessage());
+			return "500 Internal Error";
+		}
+		
+		//Check for HTTP version greater than 1.0
+		if(vers > 1.0)
+		{
+			return "505 HTTP Version Not Supported";
 		}
 		
 		//Check if the Request is not a GET, if command is all caps
