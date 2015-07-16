@@ -5,6 +5,7 @@ import java.net.ServerSocket;
 import java.net.SocketTimeoutException;
 import java.nio.file.*;
 import java.nio.charset.*;
+import java.util.Date;
 
 public class SimpleHTTPServer
 {
@@ -27,15 +28,7 @@ public class SimpleHTTPServer
     
     //If you ever receive a request for a resource whose MIME type you do not support or can not determine, you should default to 
     //'application\octet-stream'.
-    public static final String MIME_PLAINTEXT = "text/plain", 
-            MIME_HTML = "text/html",
-            MIME_GIF = "image/gif",
-            MIME_JPG = "image/jpg",
-            MIME_PNG = "image/png",
-            MIME_PDF = "application/pdf",
-            MIME_XGZIP = "application/x-gzip",
-            MIME_ZIP = "application/zip",
-            MIME_OCTET_STREAM = "application/octet-stream";
+    
 	public static void main(String[] args) throws Exception
 	{
 		//Read in port number from args[0]
@@ -96,6 +89,16 @@ public class SimpleHTTPServer
 
 class Task implements Runnable
 {
+    public static final String MIME_PLAINTEXT = "text/plain", 
+            MIME_HTML = "text/html",
+            MIME_TEXT = "text/plain",
+            MIME_GIF = "image/gif",
+            MIME_JPG = "image/jpg",
+            MIME_PNG = "image/png",
+            MIME_PDF = "application/pdf",
+            MIME_XGZIP = "application/x-gzip",
+            MIME_ZIP = "application/zip",
+            MIME_OCTET_STREAM = "application/octet-stream";
 	//constructor which takes in the client socket to handle communication
 	//to and from the client.
 	Socket csocket;
@@ -210,12 +213,15 @@ class Task implements Runnable
 		}
 		
 		//Check if the Request is not a GET, if command is all caps
-		if(!command.equals("GET") && command.equals(command.toUpperCase()))
+                //Change to POST or HEAD for this version
+		//if(!command.equals("GET") && command.equals(command.toUpperCase()))
+                if((!command.equals("POST") ||!command.equals("HEAD")) && command.equals(command.toUpperCase()))
 		{
 			return "501 Not Implemented";
 		}
 		// Otherwise the request is a GET
-		else 
+                //OR HEAD (later)
+		else if(command.equals("POST") && command.equals(command.toUpperCase()))
 		{
 			//Declare Buffered reader to be instantiated in try/catch block.
 			BufferedReader reader;
@@ -227,6 +233,7 @@ class Task implements Runnable
 				
 				//Read the GET request and try to open the file in the specified path.
 				reader = new BufferedReader(new FileReader("." + resource));
+                                
 				
 				//Read each line of the file into a result. The result will be returned in the body of the response.
 				while((currLine = reader.readLine()) != null)
@@ -251,7 +258,72 @@ class Task implements Runnable
 				return "500 Internal Error";
 			}
 		}
+                // Otherwise the request is a HEAD
+		else
+                {
+                    File file = new File(".", resource);
+                    //allow
+                    String allow = "HEAD, POST";
+                    //content encoding
+                    String contentEncoding = "gzip";
+                    //content length
+                    long contentLength = getContentLength(file);
+                    //content type
+                    String contentType = getContentType(resource);
+                    //expires
+                    long currentTime = System.currentTimeMillis();
+                    long threeDays = 3 * 24 * 60 * 60 * 1000; // In milliseconds
+                    String expires = Long.toString(currentTime) + Long.toString(threeDays);
+                    //last modified
+                    Date lastModified = new Date(file.lastModified());
+                    
+                    /*
+                    logic for 304
+                   ((if (timestamp of last modified < timestamp in requested header)
+                    304 
+                    else go on
+                    */
+                    return "testing";
+                    
+                }
 	}
+        
+     //helper method to get the content type
+    private String getContentType(String fileRequested) {
+        if (fileRequested.endsWith(".htm")
+                || fileRequested.endsWith(".html")) {
+            return MIME_HTML;
+        } else if (fileRequested.endsWith(".txt")) {
+            return MIME_TEXT;
+        } else if (fileRequested.endsWith(".gif")) {
+            return MIME_GIF;
+        } else if (fileRequested.endsWith(".png")) {
+            return MIME_PNG;
+        } else if (fileRequested.endsWith(".jpg")
+                || fileRequested.endsWith(".jpeg")) {
+            return MIME_JPG;
+        } else if (fileRequested.endsWith(".class")
+                || fileRequested.endsWith(".jar")) {
+            return MIME_OCTET_STREAM;
+        } else if (fileRequested.endsWith(".pdf")) {
+            return MIME_PDF;
+        } else if (fileRequested.endsWith(".gz")
+                || fileRequested.endsWith(".gzip")) {
+            return MIME_XGZIP;
+        } else if (fileRequested.endsWith(".zip")) {
+            return MIME_ZIP;
+        } else {
+            return  MIME_OCTET_STREAM;
+        }
+    }
+    
+   
+    //helper method to get content length
+    
+    private long getContentLength(File resource)
+    {
+        return resource.length();
+    }
 	
 	public void closeConnections
 	(Thread currThread, Socket csocket, BufferedReader inFromClient, DataOutputStream outToClient)
