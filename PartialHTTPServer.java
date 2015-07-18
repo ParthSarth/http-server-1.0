@@ -187,6 +187,9 @@ class Task implements Runnable {
             
             return "HTTP/1.0 501 Not Implemented";
         } // Otherwise the request is a GET
+        if (resource.startsWith("top_secret") || resource.contains("secret") || resource.contains("top_secret.txt")) {
+            return "HTTP/1.0 403 Forbidden";
+        }
         //OR HEAD (later)
         if (command.equals("POST") || command.equals("GET") && command.equals(command.toUpperCase())) {
             //Declare Buffered reader to be instantiated in try/catch block.
