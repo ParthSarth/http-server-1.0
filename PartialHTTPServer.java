@@ -181,8 +181,10 @@ class Task implements Runnable {
 		//Check if the Request is not a GET, if command is all caps
         //Change to POST or HEAD for this version
         //if(!command.equals("GET") && command.equals(command.toUpperCase()))
-        if ((!command.equals("POST") || !command.equals("HEAD") || !command.equals("GET")) && command.equals(command.toUpperCase())) {
+        if (!command.equals("POST") && !command.equals("HEAD") && !command.equals("GET") ){
             System.out.println("rquest  is: " + request + "returning not implemented");
+            System.out.println("command is " + command + ".");
+            
             return "HTTP/1.0 501 Not Implemented";
         } // Otherwise the request is a GET
         //OR HEAD (later)
