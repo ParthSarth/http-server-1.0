@@ -12,10 +12,10 @@ import java.util.TimeZone;
 import java.text.SimpleDateFormat;
 
 public class PartialHTTPServer {
-	//Set final strings for the error/success codes
+    //Set final strings for the error/success codes
 
     public static final String 
-    		HTTP_OK = "200 OK",
+            HTTP_OK = "200 OK",
             HTTP_NOTMODIFIED = "304 Not Modified",
             HTTP_BADREQUEST = "400 Bad Request",
             HTTP_FORBIDDEN = "403 Forbidden",
@@ -28,7 +28,7 @@ public class PartialHTTPServer {
 
     public static void main(String[] args) throws Exception {
         
-    	//Read in port number from args[0]
+        //Read in port number from args[0]
         int port = 0;
 
         try {
@@ -48,12 +48,12 @@ public class PartialHTTPServer {
             ssocket = new ServerSocket(port);
             System.out.println("listening..");
 
-			//Accept incoming connections, and initiate a thread
+            //Accept incoming connections, and initiate a thread
             //to handle the communicaiton.
             while (true) 
             {
                 connectionSock = ssocket.accept();
-                System.out.println("connected");
+                System.out.println("----------------------connected----------------------");
                 task = new Thread(new Task(connectionSock));
                 task.start();
             }
@@ -81,9 +81,9 @@ public class PartialHTTPServer {
 }
 
 class Task implements Runnable {
-	
+    
     public static final String 
-    		MIME_PLAINTEXT = "text/plain",
+            MIME_PLAINTEXT = "text/plain",
             MIME_HTML = "text/html",
             MIME_TEXT = "text/plain",
             MIME_GIF = "image/gif",
@@ -93,7 +93,7 @@ class Task implements Runnable {
             MIME_XGZIP = "application/x-gzip",
             MIME_ZIP = "application/zip",
             MIME_OCTET_STREAM = "application/octet-stream";
-	
+    
     //constructor which takes in the client socket to handle communication
     //to and from the client.
     Socket csocket;
@@ -112,7 +112,7 @@ class Task implements Runnable {
         byte[] response = null;
 
         try {
-			//instantiate I/O streams and set connection timeout
+            //instantiate I/O streams and set connection timeout
             csocket.setSoTimeout(3000);
             outToClient = new DataOutputStream(csocket.getOutputStream());
             inFromClient = new BufferedReader(new InputStreamReader(csocket.getInputStream()));
@@ -122,7 +122,9 @@ class Task implements Runnable {
             requestHead = inFromClient.readLine();
             if(requestHead != null && requestHead.startsWith("If-Modified-Since"))
             {
-            	modifiedSince = parseRequestHead(requestHead);
+                modifiedSince = parseRequestHead(requestHead);
+                if(modifiedSince!=null)
+                System.out.println("RequestHead: " + modifiedSince.toString());
             }
             response = parseRequest(request, modifiedSince).getBytes();
             System.out.println(response);
@@ -177,6 +179,7 @@ class Task implements Runnable {
             return "HTTP/1.0 400 Bad Request";
         }
         
+        //Parse the Http version. 
         try {
             vers = Float.parseFloat(version.substring(version.length() - 3));
             System.out.println("Request:: Version = " + vers );
@@ -190,7 +193,7 @@ class Task implements Runnable {
             return "HTTP/1.0 505 HTTP Version Not Supported";
         }
 
-		//Check if command is a valid command
+        //Check if command is a valid command
         if (!command.equals("POST") && !command.equals("HEAD") && !command.equals("GET") ){
             return "HTTP/1.0 501 Not Implemented";
         }
@@ -200,18 +203,19 @@ class Task implements Runnable {
             return "HTTP/1.0 403 Forbidden";
         }
         
-        //COMMAND is a valid GET OR POST
-        if ((command.equals("POST") || command.equals("GET"))) {
+        //COMMAND is a valid GET OR POST (return header and body)
+        if ((command.equals("POST") || command.equals("GET"))) 
+        {
             //Declare Buffered reader to be instantiated in try/catch block.
-            System.out.print(" Request = " + request);
-            System.out.println("reading file " + resource);
+            System.out.println("REQUEST = " + request);
             BufferedReader reader;
-            try {
-
+            try 
+            {
+                
                 String result = "";
                 String currLine = "";
                 
-                //Read the GET request and try to open the file in the specified path.
+                //Read the GET/POST request and try to open the file in the specified path.
                 reader = new BufferedReader(new FileReader("." + resource));
 
                 //Read each line of the file into a result. The result will be returned in the body of the response.
@@ -221,19 +225,27 @@ class Task implements Runnable {
                 reader.close();
                 
               //No exceptions were thrown, so return 200 OK and the body of the response.
-                String newOut = addBody(addHeader(theOutput, resource, modifiedSince),result);
+                String newOut = addBody(addHeader(theOutput, resource, command, modifiedSince),result);
                
                 return (newOut);
 
-            } catch (FileNotFoundException except) {
+            } 
+            catch (FileNotFoundException except) 
+            {
                 System.out.println("Cannot find file: " + except.getMessage());
                 return "HTTP/1.0 404 Not Found";
-            } catch (IOException ex) {
+            } 
+            catch (IOException ex) 
+            {
                 System.out.println("Internal error " + ex.getMessage());
                 return "HTTP/1.0 500 Internal Error";
             }
-        }else // Otherwise the request is a HEAD
-        	if(command.equals("HEAD")) {
+        }
+        
+        // Command is a valid HEAD (return only header, no body)
+        if(command.equals("HEAD")) 
+        {
+            System.out.println("REQUEST = " + request);
             File file = new File(".", resource);
             //allow
             String allow = "HEAD, POST";
@@ -249,95 +261,125 @@ class Task implements Runnable {
             String expires = Long.toString(currentTime) + Long.toString(threeDays);
             //last modified
             Date lastModified = new Date(file.lastModified());
-
-            /*
-             logic for 304
-             ((if (timestamp of last modified < timestamp in requested header)
-             304 
-             else go on
-             */
+                /*              logic for 304
+                ((if (timestamp of last modified < timestamp in requested header)
+                304 
+                else go on
+                 */
             String headOutput = "";
-            String result = addHeader(headOutput,resource,modifiedSince);
+            String result = addHeader(headOutput,resource,command,modifiedSince);
             System.out.println(result);
             return result;
         }
-        	return null;
+            
+        return null;
         
     }
-    
-    private String addHeader(String input, String resource, Date modSince)
+    //TODO if command is HEAD ignore If modified since..
+    private String addHeader(String input, String resource, String command, Date modSince)
     {
-    	//TODO finish method
-    	File file = new File(".", resource);
-    	Date lastModifiedDate = new Date(file.lastModified());
-    	DateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy hh:mm:ss z");
-    	dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
-    	String lastModified = dateFormat.format(lastModifiedDate);
-    	String lineSeparator = "\r\n";
-    	
-    	if(modSince != null)
-    	{
-    		if(lastModifiedDate.before(modSince) && modSince != null)
-        	{
-        		return "HTTP/1.0 304 Not Modified" + lineSeparator + "Expires: Tue, 20 Jul 2019 14:13:49 GMT";
-        	}
-    	}
-    	
-    	input = ("HTTP/1.0 200 OK" 
-        		+ lineSeparator 
+        //TODO finish method
+        File file = new File(".", resource);
+        DateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z");
+        dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
+        
+        Date lastModifiedDate = new Date(file.lastModified());
+    
+        //Declare a date format string and a date object to store modSince in Gmt Format.
+        String modSinceGmt = "";
+        Date modSinceGmtDate = null;
+        String lastModifiedGmt = "";
+        Date lastModifiedDateGmt = null;
+        
+        lastModifiedGmt = dateFormat.format(lastModifiedDate);
+        
+        if(modSince!=null)
+        {
+            modSinceGmt = dateFormat.format(modSince);
+            
+            System.out.println("LAST MODIFIED GMT = " + lastModifiedGmt);
+            try
+            {
+                modSinceGmtDate = dateFormat.parse(modSinceGmt);
+                lastModifiedDateGmt = dateFormat.parse(lastModifiedGmt);
+            }
+            catch(Exception except)
+            {
+                System.out.println("Error: " + except.getMessage());
+            }
+        }
+            String lineSeparator = "\r\n";
+            
+            if(lastModifiedGmt!=null && modSinceGmt!=null)
+            {
+                System.out.println("LastModified: "+lastModifiedGmt + '\n' + "ModifiedSince: " + modSinceGmt);
+            }
+            
+            if(modSinceGmtDate != null && lastModifiedDateGmt !=null)
+            {
+                
+                if(lastModifiedDateGmt.before(modSinceGmtDate) && !command.equals("HEAD"))
+                {
+                    return "HTTP/1.0 304 Not Modified" + lineSeparator + "Expires: Tue, 20 Jul 2019 14:13:49 GMT" + lineSeparator;
+                }
+            }
+        
+        input = ("HTTP/1.0 200 OK" 
+                + lineSeparator 
                 + "Content-Type: " + getContentType(resource) 
                 + lineSeparator 
                 + "Content-Length: " + file.length()
                 + lineSeparator
-                + "Last-Modified: " + lastModified
-    			+ lineSeparator
-    			+ "Content-Encoding: identity"
-    			+ lineSeparator
-    			+ "Allow: GET, POST, HEAD"
-    			+ lineSeparator
-    			+ "Expires: Tue, 20 Jul 2019 14:13:49 GMT"
-    			+ lineSeparator);
-    
-    	return input;
+                + "Last-Modified: " + lastModifiedGmt
+                + lineSeparator
+                + "Content-Encoding: identity"
+                + lineSeparator
+                + "Allow: GET, POST, HEAD"
+                + lineSeparator
+                + "Expires: Tue, 20 Jul 2019 14:13:49 GMT"
+                + lineSeparator);
+        System.out.println(input);
+        return input;
     }
     
     private Date parseRequestHead(String dateStr)
     {
-    	DateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy hh:mm:ss z");
-    	dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
-    	Date date = null;
-    	try{
-    		date = dateFormat.parse(dateStr.substring(19));
-    	}catch(Exception except)
-    	{	
-    		System.out.println(except.getMessage());
-    	}
-    	return date;
+        DateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy hh:mm:ss z");
+        dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
+        Date date = null;
+        try{
+            date = dateFormat.parse(dateStr.substring(19));
+        }catch(Exception except)
+        {   
+            System.out.println(except.getMessage());
+            return null;
+        }
+        return date;
     }
     
     private String addBody(String input, String result)
     {
-    	String lineSeparator = "\r\n";
-    	String newString = "";
-    	newString = input + lineSeparator + result + lineSeparator;
-    	return newString;
+        String lineSeparator = "\r\n";
+        String newString = "";
+        newString = input + lineSeparator + result + lineSeparator;
+        return newString;
     }
     
     private String getHeader(String input)
     {
-    	//TODO finish method
-    	return input;
+        //TODO finish method
+        return input;
     }
     
     private byte[] getBody(String input)
     {
-    	return input.getBytes();
+        return input.getBytes();
     }
     
     private boolean isModifiedSince(String date)
     {
-    	//TODO finish method
-    	return false;
+        //TODO finish method
+        return false;
     }
     
     //helper method to get the content type
