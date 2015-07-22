@@ -10,20 +10,10 @@ import java.text.DateFormat;
 import java.util.Date;
 import java.util.TimeZone;
 import java.text.SimpleDateFormat;
-
-public class PartialHTTPServer {
-	//Set final strings for the error/success codes
-    public static final String 
-    		HTTP_OK = "200 OK",
-            HTTP_NOTMODIFIED = "304 Not Modified",
-            HTTP_BADREQUEST = "400 Bad Request",
-            HTTP_FORBIDDEN = "403 Forbidden",
-            HTTP_NOTFOUND = "404 Not Found",
-            HTTP_TIMEOUT = "408 Request Timeout",
-            HTTP_INTERNALERROR = "500 Internal Server Error",
-            HTTP_NOTIMPLEMENTED = "501 Not Implemented",
-            HTTP_UNAVAILABLE = "503 Service Unavailable",
-            HTTP_NOTSUPPORTED = "505 HTTP Version Not Supported";
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.Path;
+public class PartialHTTP1Server {
 
     public static void main(String[] args) throws Exception {
         
@@ -79,7 +69,13 @@ public class PartialHTTPServer {
     }
 }
 
+
+//*****************************Start of Runnable class****************************
+
 class Task implements Runnable {
+	
+	public String headerToSend = null;
+	public byte[] bodyToSend = null;
 	
     public static final String 
     		MIME_PLAINTEXT = "text/plain",
@@ -103,12 +99,13 @@ class Task implements Runnable {
     @Override
     public void run() {
         //declare vars to be instantiated in try/catch block
-        BufferedReader inFromClient = null;
-        DataOutputStream outToClient = null;
-        String request = null;
-        String requestHead = null;
-        Date modifiedSince = null;
-        byte[] response = null;
+        BufferedReader 		inFromClient = null;
+        DataOutputStream 	outToClient = null;
+        String 				request = null;
+        String 				requestHead = null;
+        Date 				modifiedSince = null;
+        byte[] 				response = null;
+        String 				headerResponse = null;
 
         try {
 			//instantiate I/O streams and set connection timeout
@@ -119,32 +116,56 @@ class Task implements Runnable {
             //read and parse a HTTP request from the client, send the response back
             request = inFromClient.readLine();
             requestHead = inFromClient.readLine();
+            
+            //parse the date from the If-Modified-Since header field.
             if(requestHead != null && requestHead.startsWith("If-Modified-Since"))
             {
             	modifiedSince = parseRequestHead(requestHead);
-            	if(modifiedSince!=null)
-            	System.out.println("RequestHead: " + modifiedSince.toString());
             }
+            
             response = parseRequest(request, modifiedSince).getBytes();
-            System.out.println(response);
-            outToClient.write(response,0,response.length);
-        } //handle socket timeout here (send 408 response)
-        catch (SocketTimeoutException except) {
+            
+            System.out.println(headerToSend);
+            System.out.println(bodyToSend);
+            if(headerToSend != null && bodyToSend != null)
+            {
+            	outToClient.writeBytes(headerToSend);
+            	outToClient.write(bodyToSend,0,bodyToSend.length);
+            }
+            else
+           	{
+            	outToClient.write(response,0,response.length);
+            }
+           
+        } 
+        
+        //handle socket timeout here (send 408 response)
+        catch (SocketTimeoutException except) 
+        {
             System.out.println("Error. Request timed out: " + except.getMessage());
-            try {
+            try 
+            {
                 outToClient.writeBytes("HTTP/1.0 408 Request Timeout");
-            } catch (IOException ex) {
+            } 
+            catch (IOException ex) 
+            {
                 System.out.println("Error while sending 408 Request Timeout:" + ex.getMessage());
 
                 //if Unable to send a timeout response, send an internal error response
-                try {
+                try 
+                {
                     outToClient.writeBytes("HTTP/1.0 500 Internal Error");
-                } catch (IOException exc) {
+                } 
+                catch (IOException exc) 
+                {
                     System.out.println("Error while sending 500 Internal Error:" + exc.getMessage());
                 }
             }
-        } //handle other socket/IO stream errors here
-        catch (IOException except) {
+        } 
+       
+        //handle other socket/IO stream errors here
+        catch (IOException except) 
+        {
             System.out.println("Error while running thread: " + except.getMessage());
             try {
                 outToClient.writeBytes("HTTP/1.0 500 Internal Error");
@@ -158,9 +179,9 @@ class Task implements Runnable {
     }
 
     //Parses the request and returns a response.
-    public String parseRequest(String request, Date modifiedSince) {
-        //Parse the request into a command and resource.
-        String theOutput = "";
+    public String parseRequest(String request, Date modifiedSince) 
+    {
+        //Instantiate variables to be used for parsing the request and returning a correct response.
         String lineSeparator = "\r\n";
         String delims = "[ ]";
         String[] tokens = request.split(delims);
@@ -168,21 +189,27 @@ class Task implements Runnable {
         String resource = "badresource";
         String version = "badversion";
         float vers;
-        if (tokens.length == 3) {
+        
+        //Pattern is matched, put first command resource and version into respective variables.
+        if (tokens.length == 3) 
+        {
             command = tokens[0];
             resource = tokens[1];
             version = tokens[2];
         }
+        
         //Check for proper formatting.
         if (tokens.length != 3 || !resource.startsWith("/") || !command.equals(command.toUpperCase()) || command.toUpperCase().equals("KICK") || !version.substring(0, 5).equals("HTTP/")) {
             return "HTTP/1.0 400 Bad Request";
         }
         
         //Parse the Http version. 
-        try {
+        try 
+        {
             vers = Float.parseFloat(version.substring(version.length() - 3));
-            System.out.println("Request:: Version = " + vers );
-        } catch (NumberFormatException except) {
+        } 
+        catch (NumberFormatException except) 
+        {
             System.out.println("Error in parsing version: " + except.getMessage());
             return "HTTP/1.0 500 Internal Error";
         }
@@ -202,6 +229,8 @@ class Task implements Runnable {
             return "HTTP/1.0 403 Forbidden";
         }
         
+        /***************All formatting checks completed, code below this handles correctly formatted GET,POST, and HEAD HTTP requests.*******************/
+        
         //COMMAND is a valid GET OR POST (return header and body)
         if ((command.equals("POST") || command.equals("GET"))) 
         {
@@ -210,23 +239,26 @@ class Task implements Runnable {
             BufferedReader reader;
             try 
             {
-            	
                 String result = "";
                 String currLine = "";
                 
-                //Read the GET/POST request and try to open the file in the specified path.
-                reader = new BufferedReader(new FileReader("." + resource));
-
-                //Read each line of the file into a result. The result will be returned in the body of the response.
-                while ((currLine = reader.readLine()) != null) {
-                    result += currLine + "\r\n";
-                }
-                reader.close();
+                //Open a file containing the specified resource. Sore it in a byte[]
+                File file = new File("." + resource);
+                FileInputStream finStream = new FileInputStream(file);
+                byte fileBytes[] = new byte[(int)file.length()];
+                finStream.read(fileBytes);
+                String byteString = new String(fileBytes);
                 
-              //No exceptions were thrown, so return 200 OK and the body of the response.
-                String newOut = addBody(addHeader(theOutput, resource, command, modifiedSince),result);
-               
-                return (newOut);
+                //Close file input stream
+                if(finStream!=null)
+                	finStream.close();
+                
+                //No exceptions were thrown, so get the header and the body and send it back in a response.
+                String header = addHeader(resource, command, modifiedSince);
+                String response = addBody(header,byteString);
+                setHeader(header);
+                setBody(fileBytes);
+                return response;
 
             } 
             catch (FileNotFoundException except) 
@@ -239,51 +271,38 @@ class Task implements Runnable {
                 System.out.println("Internal error " + ex.getMessage());
                 return "HTTP/1.0 500 Internal Error";
             }
+          
         }
         
         // Command is a valid HEAD (return only header, no body)
         if(command.equals("HEAD")) 
        	{
-        	System.out.println("REQUEST = " + request);
+        	
        		File file = new File(".", resource);
-       		//allow
-       		String allow = "HEAD, POST";
-       		//content encoding
-       		String contentEncoding = "gzip";
-       		//content length
-       		long contentLength = getContentLength(file);
-        	//content type
-       		String contentType = getContentType(resource);
-       		//expires
-      		long currentTime = System.currentTimeMillis();
-       		long threeDays = 3 * 24 * 60 * 60 * 1000; // In milliseconds
-       		String expires = Long.toString(currentTime) + Long.toString(threeDays);
-       		//last modified
        		Date lastModified = new Date(file.lastModified());
-        		/*             	logic for 304
-             	((if (timestamp of last modified < timestamp in requested header)
-             	304 
-             	else go on
-        		 */
-        	String headOutput = "";
-        	String result = addHeader(headOutput,resource,command,modifiedSince);
+ 
+       		//Only return the header if the command is a HEAD
+        	String result = addHeader(resource,command,modifiedSince);
        		return result;
         }
         	
         return null;
         
     }
-    //TODO if command is HEAD ignore If modified since..
-    private String addHeader(String input, String resource, String command, Date modSince)
+    
+    //Method that returns a header, based off the request.
+    private String addHeader(String resource, String command, Date modSince)
     {
-    	//TODO finish method
+    	//Create a new instance of the file we are returning.
     	File file = new File(".", resource);
+    	
+    	//Set DateFormat to GMT. Use dateFormat to format the input date.
     	DateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z");
     	dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
     	
     	Date lastModifiedDate = new Date(file.lastModified());
     
-    	//Declare a date format string and a date object to store modSince in Gmt Format.
+    	//Declare a date format string and a date object to store modSince and lastModified in Gmt Format.
     	String modSinceGmt = "";
     	Date modSinceGmtDate = null;
     	String lastModifiedGmt = "";
@@ -291,6 +310,7 @@ class Task implements Runnable {
     	
     	lastModifiedGmt = dateFormat.format(lastModifiedDate);
     	
+    	//Logic for formatting dates.
     	if(modSince!=null)
     	{
     		modSinceGmt = dateFormat.format(modSince);
@@ -315,15 +335,15 @@ class Task implements Runnable {
     		
     		if(modSinceGmtDate != null && lastModifiedDateGmt !=null)
     		{
-    			
+    			//Check to see if file has been modified since the If-modifice-since header field. If yes, return error code.
     			if(lastModifiedDateGmt.before(modSinceGmtDate) && !command.equals("HEAD"))
     			{
-    				System.out.println("HTTP/1.0 304 Not Modified" + lineSeparator + "Expires: Tue, 20 Jul 2019 14:13:49 GMT" + lineSeparator);
     				return "HTTP/1.0 304 Not Modified" + lineSeparator + "Expires: Tue, 20 Jul 2019 14:13:49 GMT" + lineSeparator;
     			}
     		}
     	
-    	input = ("HTTP/1.0 200 OK" 
+    	//Header to be returned.
+    	String input = ("HTTP/1.0 200 OK" 
         		+ lineSeparator 
                 + "Content-Type: " + getContentType(resource) 
                 + lineSeparator 
@@ -336,11 +356,12 @@ class Task implements Runnable {
     			+ "Allow: GET, POST, HEAD"
     			+ lineSeparator
     			+ "Expires: Tue, 20 Jul 2019 14:13:49 GMT"
+    			+ lineSeparator
     			+ lineSeparator);
-    	System.out.println(input);
     	return input;
     }
     
+    //Method that returns the Date associated with the If-Modified-Since request header field.
     private Date parseRequestHead(String dateStr)
     {
     	DateFormat dateFormat = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z");
@@ -356,31 +377,15 @@ class Task implements Runnable {
     	return date;
     }
     
+    //Method that appends the body onto the header, and returns, the result.
     private String addBody(String input, String result)
     {
     	String lineSeparator = "\r\n";
     	
     	return input + result + lineSeparator + lineSeparator;
     }
-    
-    private String getHeader(String input)
-    {
-    	//TODO finish method
-    	return input;
-    }
-    
-    private byte[] getBody(String input)
-    {
-    	return input.getBytes();
-    }
-    
-    private boolean isModifiedSince(String date)
-    {
-    	//TODO finish method
-    	return false;
-    }
-    
-    //helper method to get the content type
+     
+    //Method to get the content type
     private String getContentType(String fileRequested) {
         if (fileRequested.endsWith(".htm")
                 || fileRequested.endsWith(".html")) {
@@ -409,11 +414,12 @@ class Task implements Runnable {
         }
     }
 
-    //helper method to get content length
+    //Method to get content length
     private long getContentLength(File resource) {
         return resource.length();
     }
-
+    
+    //Method that closes and flushes all open connections.
     public void closeConnections(Thread currThread, Socket csocket, BufferedReader inFromClient, DataOutputStream outToClient) {
         Thread thread = currThread;
         try {
@@ -425,6 +431,20 @@ class Task implements Runnable {
             System.out.println("Error while closing connections: " + except.getMessage());
             return;
         }
+    }
+    
+    //Sets global header that will be sent to client
+    private void setHeader(String input)
+    {
+    	headerToSend = input;
+    	return;
+    }
+    
+    //Sets global payload that will be sent to client
+    private void setBody(byte arr[])
+    {
+    	bodyToSend = arr;
+    	return;
     }
 }
 
