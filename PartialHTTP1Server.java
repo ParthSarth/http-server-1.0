@@ -48,7 +48,9 @@ class ThreadPoolServer implements Runnable{
     protected int port;
     protected boolean isDone = false;
     protected Thread currentThread = null;
+    //Blocking queue of 5 slots
     LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<Runnable>(5);
+    //Thread pool. 5 threads, max 50 at 1 tme. IDLE time 5 mins (3000000)
     ThreadPoolExecutor pool = new ThreadPoolExecutor(5, 50, 300000, TimeUnit.MILLISECONDS, queue);
     
     public ThreadPoolServer(int port){
@@ -102,8 +104,8 @@ class ThreadPoolServer implements Runnable{
                 	try
                 	{
                 		outToClient = new DataOutputStream(connectionSock.getOutputStream());
-                		outToClient.writeInt("503 Service Unavailable");
-                		outToclient.close();
+                		outToClient.writeBytes("HTTP/1.0 503 Service Unavailable");
+                		outToClient.close();
                 		connectionSock.close();
                 	}
                 	catch(IOException except)
@@ -121,6 +123,7 @@ class ThreadPoolServer implements Runnable{
             //Close down the server.
             this.pool.shutdown();
         try {
+            this.isDone = true;
             ssocket.close();
             return;
         } catch (IOException except) {
