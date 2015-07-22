@@ -104,11 +104,9 @@ class ThreadPoolServer implements Runnable{
                 	try
                 	{
                 		outToClient = new DataOutputStream(connectionSock.getOutputStream());
-<<<<<<< HEAD
-                		outToClient.writeBytes("503 Service Unavailable");
-=======
+
                 		outToClient.writeBytes("HTTP/1.0 503 Service Unavailable");
->>>>>>> 4d30fa1c0454462ebb5d06026dd20d968fd5ccc2
+
                 		outToClient.close();
                 		connectionSock.close();
                 	}
@@ -127,12 +125,8 @@ class ThreadPoolServer implements Runnable{
             //Close down the server.
             this.pool.shutdown();
         try {
-<<<<<<< HEAD
         	this.isDone = true;
-=======
-            this.isDone = true;
->>>>>>> 4d30fa1c0454462ebb5d06026dd20d968fd5ccc2
-            ssocket.close();
+        	ssocket.close();
             return;
         } catch (IOException except) {
             System.out.println("Error while closing ssocket: " + except.getMessage());
