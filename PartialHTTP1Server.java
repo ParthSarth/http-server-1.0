@@ -31,7 +31,8 @@ public class PartialHTTP1Server{
             System.out.println("Error: " + except.getMessage());
             return;
         }
-
+        
+        //Create new ThreadPoolServer, and start it.
         ThreadPoolServer s = new ThreadPoolServer(port);
         System.out.println("starting thread pool");
         new Thread(s).start();
@@ -81,19 +82,42 @@ class ThreadPoolServer implements Runnable{
             //to handle the communicaiton.
             while (true) 
             {
-                try {
+                try 
+                {
                     connectionSock = ssocket.accept();
-                } catch (IOException e) {
-                    if (isDone) {
+                } 
+                catch (IOException e) 
+                {
+                    if (isDone) 
+                    {
                         System.out.println("Server Stopped.");
                         break;
                     }
                 }
+                
                 System.out.println("----------------------connected----------------------");
-                //task = new Thread(new Task(connectionSock));
-                this.pool.execute(new Task(connectionSock));
-                //task.start();
+                if(this.pool.getPoolSize()==50)
+                {
+                	DataOutputStream 	outToClient = null;
+                	try
+                	{
+                		outToClient = new DataOutputStream(connectionSock.getOutputStream());
+                		outToClient.writeInt("503 Service Unavailable");
+                		outToclient.close();
+                		connectionSock.close();
+                	}
+                	catch(IOException except)
+                	{
+                		System.out.println("Error: cannot support more than 50 connections." + except.getMessage());
+                	}
+                }
+                else
+                {
+                	this.pool.execute(new Task(connectionSock));
+                }
+                
             }
+            //Close down the server.
             this.pool.shutdown();
         try {
             ssocket.close();
@@ -101,23 +125,8 @@ class ThreadPoolServer implements Runnable{
         } catch (IOException except) {
             System.out.println("Error while closing ssocket: " + except.getMessage());
                 return;        }
-        } 
         
-        //Close down server socket.
-//        finally 
-//        {
-//            try 
-//            {
-//                this.pool.shutdown();
-//                ssocket.close();
-//                return;
-//            } 
-//            catch (IOException except) 
-//            {
-//                System.out.println("Error while closing ssocket: " + except.getMessage());
-//                return;
-//            }
-//        }
+        }
     }
     
 
