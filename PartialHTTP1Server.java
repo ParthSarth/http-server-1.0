@@ -95,7 +95,7 @@ class ThreadPoolServer implements Runnable{
                     }
                 }
                 
-                System.out.println("----------------------connected----------------------");
+                //Check how many open connections we have on the server, if 50, send 503 service unavailable.
                 if(this.pool.getPoolSize()==50)
                 {
                 	DataOutputStream 	outToClient = null;
@@ -113,6 +113,7 @@ class ThreadPoolServer implements Runnable{
                 }
                 else
                 {
+                	System.out.println("----------------------connected----------------------");
                 	this.pool.execute(new Task(connectionSock));
                 }
                 
