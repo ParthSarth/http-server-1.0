@@ -13,7 +13,12 @@ import java.text.SimpleDateFormat;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.Path;
-public class PartialHTTP1Server {
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+public class PartialHTTP1Server{
 
     public static void main(String[] args) throws Exception {
         
@@ -27,47 +32,95 @@ public class PartialHTTP1Server {
             return;
         }
 
+        ThreadPoolServer s = new ThreadPoolServer(port);
+        System.out.println("starting thread pool");
+        new Thread(s).start();
+        try {
+            Thread.sleep(20 * 1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+class ThreadPoolServer implements Runnable{
+    protected int port;
+    protected boolean isDone = false;
+    protected Thread currentThread = null;
+    LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<Runnable>(5);
+    ThreadPoolExecutor pool = new ThreadPoolExecutor(5, 50, 300000, TimeUnit.MILLISECONDS, queue);
+    
+    public ThreadPoolServer(int port){
+        this.port = port;
+    }
+    
+    @Override
+    public void run(){
+        synchronized(this){
+            this.currentThread = Thread.currentThread();
+        }
         //Declare vars to be instantiate in try/catch
         ServerSocket ssocket = null;
         Socket connectionSock = null;
-        Thread task = null;
-
+        //Thread task = null;
+        
         try 
         {
+            
             ssocket = new ServerSocket(port);
             System.out.println("listening..");
+        }catch (IOException | IllegalStateException except) 
+        {
+            if(isDone){
+                System.out.println("Error creating connectionSocket or thread: " + except.getMessage());
+                return;
+            }
+        } 
 
 			//Accept incoming connections, and initiate a thread
             //to handle the communicaiton.
             while (true) 
             {
-                connectionSock = ssocket.accept();
+                try {
+                    connectionSock = ssocket.accept();
+                } catch (IOException e) {
+                    if (isDone) {
+                        System.out.println("Server Stopped.");
+                        break;
+                    }
+                }
                 System.out.println("----------------------connected----------------------");
-                task = new Thread(new Task(connectionSock));
-                task.start();
+                //task = new Thread(new Task(connectionSock));
+                this.pool.execute(new Task(connectionSock));
+                //task.start();
             }
-        } 
-        catch (IOException | IllegalStateException except) 
-        {
-            System.out.println("Error creating connectionSocket or thread: " + except.getMessage());
+            this.pool.shutdown();
+        try {
+            ssocket.close();
             return;
+        } catch (IOException except) {
+            System.out.println("Error while closing ssocket: " + except.getMessage());
+                return;        }
         } 
+        
         //Close down server socket.
-        finally 
-        {
-            try 
-            {
-                ssocket.close();
-                return;
-            } 
-            catch (IOException except) 
-            {
-                System.out.println("Error while closing ssocket: " + except.getMessage());
-                return;
-            }
-        }
+//        finally 
+//        {
+//            try 
+//            {
+//                this.pool.shutdown();
+//                ssocket.close();
+//                return;
+//            } 
+//            catch (IOException except) 
+//            {
+//                System.out.println("Error while closing ssocket: " + except.getMessage());
+//                return;
+//            }
+//        }
     }
-}
+    
+
 
 
 //*****************************Start of Runnable class****************************
@@ -76,7 +129,8 @@ class Task implements Runnable {
 	
 	public String headerToSend = null;
 	public byte[] bodyToSend = null;
-	
+    
+
     public static final String 
     		MIME_PLAINTEXT = "text/plain",
             MIME_HTML = "text/html",
@@ -106,7 +160,7 @@ class Task implements Runnable {
         Date 				modifiedSince = null;
         byte[] 				response = null;
         String 				headerResponse = null;
-
+   
         try {
 			//instantiate I/O streams and set connection timeout
             csocket.setSoTimeout(3000);
