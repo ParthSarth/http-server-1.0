@@ -102,8 +102,8 @@ class ThreadPoolServer implements Runnable{
                 	try
                 	{
                 		outToClient = new DataOutputStream(connectionSock.getOutputStream());
-                		outToClient.writeInt("503 Service Unavailable");
-                		outToclient.close();
+                		outToClient.writeBytes("503 Service Unavailable");
+                		outToClient.close();
                 		connectionSock.close();
                 	}
                 	catch(IOException except)
@@ -121,6 +121,7 @@ class ThreadPoolServer implements Runnable{
             //Close down the server.
             this.pool.shutdown();
         try {
+        	this.isDone = true;
             ssocket.close();
             return;
         } catch (IOException except) {
@@ -267,6 +268,8 @@ class Task implements Runnable {
             return "HTTP/1.0 400 Bad Request";
         }
         
+        
+        
         //Parse the Http version. 
         try 
         {
@@ -288,11 +291,14 @@ class Task implements Runnable {
             return "HTTP/1.0 501 Not Implemented";
         }
         
-        //Check for forbidden access
-        if (resource.startsWith("top_secret") || resource.contains("secret") || resource.contains("top_secret.txt")) {
-            return "HTTP/1.0 403 Forbidden";
+        if (resource.startsWith("top_secret") || resource.contains("secret") || resource.contains("top_secret.txt"))
+        {
+        	File mfile = new File("." + resource);
+        	if(!mfile.canRead())
+        	{
+        		return "HTTP/1.0 403 Forbidden";
+        	}
         }
-        
         /***************All formatting checks completed, code below this handles correctly formatted GET,POST, and HEAD HTTP requests.*******************/
         
         //COMMAND is a valid GET OR POST (return header and body)
@@ -322,6 +328,7 @@ class Task implements Runnable {
                 String response = addBody(header,byteString);
                 setHeader(header);
                 setBody(fileBytes);
+                System.out.println(response);
                 return response;
 
             } 
