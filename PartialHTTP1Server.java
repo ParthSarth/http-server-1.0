@@ -37,6 +37,7 @@ public class PartialHTTP1Server{
         System.out.println("starting thread pool");
         new Thread(s).start();
         try {
+        	//-------------------why is there a thread sleep
             Thread.sleep(20 * 1000);
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -175,7 +176,8 @@ class Task implements Runnable {
         Date 				modifiedSince = null;
         byte[] 				response = null;
         String 				headerResponse = null;
-   
+        String[] 			postRequestHeaders = new String[2];
+        
         try {
 			//instantiate I/O streams and set connection timeout
             csocket.setSoTimeout(3000);
@@ -190,9 +192,13 @@ class Task implements Runnable {
             if(requestHead != null && requestHead.startsWith("If-Modified-Since"))
             {
             	modifiedSince = parseRequestHead(requestHead);
+            }else
+            {
+            	postRequestHeaders[0] = requestHead;
+            	postRequestHeaders[1] = inFromClient.readLine();
             }
             
-            response = parseRequest(request, modifiedSince).getBytes();
+            response = parseRequest(request, modifiedSince, postRequestHeaders).getBytes();
             
             System.out.println(headerToSend);
             System.out.println(bodyToSend);
@@ -248,7 +254,7 @@ class Task implements Runnable {
     }
 
     //Parses the request and returns a response.
-    public String parseRequest(String request, Date modifiedSince) 
+    public String parseRequest(String request, Date modifiedSince, String[] postRequestHeaders) 
     {
         //Instantiate variables to be used for parsing the request and returning a correct response.
         String lineSeparator = "\r\n";
@@ -305,8 +311,8 @@ class Task implements Runnable {
         }
         /***************All formatting checks completed, code below this handles correctly formatted GET,POST, and HEAD HTTP requests.*******************/
         
-        //COMMAND is a valid GET OR POST (return header and body)
-        if ((command.equals("POST") || command.equals("GET"))) 
+        //COMMAND is a valid GET
+        if (command.equals("GET")) 
         {
             //Declare Buffered reader to be instantiated in try/catch block.
             System.out.println("REQUEST = " + request);
@@ -347,6 +353,16 @@ class Task implements Runnable {
                 return "HTTP/1.0 500 Internal Error";
             }
           
+        }
+        
+        //Command is a valid POST
+        if(command.equals("POST"))
+        {
+        	//TODO Implement postRequestHeader checks. Return respective error codes. 
+        	//TODO If valid headers but not target is not CGI, return 405. 
+        	//TODO If valid, decode the Post Request payload, set content-length variable, send decoded payload to CGI using STDIN
+        	System.out.println("Command is a POST");
+        	return "TODO - implement POST logic";
         }
         
         // Command is a valid HEAD (return only header, no body)
@@ -401,21 +417,17 @@ class Task implements Runnable {
     			System.out.println("Error: " + except.getMessage());
     		}
     	}
-    		String lineSeparator = "\r\n";
     		
-    		if(lastModifiedGmt!=null && modSinceGmt!=null)
-    		{
-    			System.out.println("LastModified: "+lastModifiedGmt + '\n' + "ModifiedSince: " + modSinceGmt);
-    		}
+    	String lineSeparator = "\r\n";
     		
-    		if(modSinceGmtDate != null && lastModifiedDateGmt !=null)
-    		{
-    			//Check to see if file has been modified since the If-modifice-since header field. If yes, return error code.
-    			if(lastModifiedDateGmt.before(modSinceGmtDate) && !command.equals("HEAD"))
-    			{
-    				return "HTTP/1.0 304 Not Modified" + lineSeparator + "Expires: Tue, 20 Jul 2019 14:13:49 GMT" + lineSeparator;
-    			}
+    	if(modSinceGmtDate != null && lastModifiedDateGmt !=null)
+   		{
+   			//Check to see if file has been modified since the If-modifice-since header field. If yes, return error code.
+   			if(lastModifiedDateGmt.before(modSinceGmtDate) && !command.equals("HEAD"))
+   			{
+   				return "HTTP/1.0 304 Not Modified" + lineSeparator + "Expires: Tue, 20 Jul 2019 14:13:49 GMT" + lineSeparator;
     		}
+    	}
     	
     	//Header to be returned.
     	String input = ("HTTP/1.0 200 OK" 
