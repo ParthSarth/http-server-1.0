@@ -47,6 +47,7 @@ public class PartialHTTP1Server{
 
 class ThreadPoolServer implements Runnable{
     protected int port;
+    protected int count = 0;
     protected boolean isDone = false;
     protected Thread currentThread = null;
     //Blocking queue of 5 slots
@@ -83,11 +84,28 @@ class ThreadPoolServer implements Runnable{
 
 			//Accept incoming connections, and initiate a thread
             //to handle the communicaiton.
+        	DataOutputStream outToClient = null;
             while (true) 
-            {
+            {	
                 try 
                 {
-                    connectionSock = ssocket.accept();
+                	//Check how many open connections we have on the server, if 50, send 503 service unavailable.
+                	if(count==50)
+                	{
+                		outToClient = new DataOutputStream(connectionSock.getOutputStream());
+
+                		outToClient.writeBytes("HTTP/1.0 503 Service Unavailable");
+
+                		outToClient.close();
+                		connectionSock.close();
+                	}
+                	else
+                	{
+                		connectionSock = ssocket.accept();
+                		count++;
+                		System.out.println("----------------------connected----------------------");
+                    	this.pool.execute(new Task(connectionSock));
+                    }
                 } 
                 catch (IOException e) 
                 {
@@ -97,41 +115,21 @@ class ThreadPoolServer implements Runnable{
                         break;
                     }
                 }
-                
-                //Check how many open connections we have on the server, if 50, send 503 service unavailable.
-                if(this.pool.getPoolSize()==50)
-                {
-                	DataOutputStream 	outToClient = null;
-                	try
-                	{
-                		outToClient = new DataOutputStream(connectionSock.getOutputStream());
-
-                		outToClient.writeBytes("HTTP/1.0 503 Service Unavailable");
-
-                		outToClient.close();
-                		connectionSock.close();
-                	}
-                	catch(IOException except)
-                	{
-                		System.out.println("Error: cannot support more than 50 connections." + except.getMessage());
-                	}
-                }
-                else
-                {
-                	System.out.println("----------------------connected----------------------");
-                	this.pool.execute(new Task(connectionSock));
-                }
-                
             }
+                
             //Close down the server.
             this.pool.shutdown();
-        try {
-        	this.isDone = true;
-        	ssocket.close();
-            return;
-        } catch (IOException except) {
-            System.out.println("Error while closing ssocket: " + except.getMessage());
-                return;        }
+            try 
+            {
+            	this.isDone = true;
+            	ssocket.close();
+            	return;
+            } 
+            catch (IOException except) 
+            {
+            	System.out.println("Error while closing ssocket: " + except.getMessage());
+                return;       
+            }
         
         }
     }
@@ -187,15 +185,20 @@ class Task implements Runnable {
             //read and parse a HTTP request from the client, send the response back
             request = inFromClient.readLine();
             requestHead = inFromClient.readLine();
-            
             //parse the date from the If-Modified-Since header field.
             if(requestHead != null && requestHead.startsWith("If-Modified-Since"))
             {
             	modifiedSince = parseRequestHead(requestHead);
-            }else
+            }else if (requestHead.startsWith("Content-Type:") || requestHead.startsWith("Content-Length:") )
             {
             	postRequestHeaders[0] = requestHead;
-            	postRequestHeaders[1] = inFromClient.readLine();
+            	String nextHeader = inFromClient.readLine();
+            	System.out.println(postRequestHeaders[0]);
+            	if (nextHeader.startsWith("Content-Type:") || nextHeader.startsWith("Content-Length:") )
+            	{
+            		postRequestHeaders[1] = nextHeader;
+            		System.out.println(postRequestHeaders[1]);
+            	}
             }
             
             response = parseRequest(request, modifiedSince, postRequestHeaders).getBytes();
