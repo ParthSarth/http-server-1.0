@@ -1,4 +1,3 @@
-
 import java.io.*;
 import java.lang.*;
 import java.net.Socket;
@@ -18,6 +17,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.Hashtable;
+import java.util.StringTokenizer;
 public class PartialHTTP1Server{
 
     public static void main(String[] args) throws Exception {
@@ -37,6 +38,7 @@ public class PartialHTTP1Server{
         System.out.println("starting thread pool");
         new Thread(s).start();
         try {
+        	//-------------------why is there a thread sleep
             Thread.sleep(20 * 1000);
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -46,6 +48,7 @@ public class PartialHTTP1Server{
 
 class ThreadPoolServer implements Runnable{
     protected int port;
+    protected int count = 0;
     protected boolean isDone = false;
     protected Thread currentThread = null;
     //Blocking queue of 5 slots
@@ -82,11 +85,28 @@ class ThreadPoolServer implements Runnable{
 
 			//Accept incoming connections, and initiate a thread
             //to handle the communicaiton.
+        	DataOutputStream outToClient = null;
             while (true) 
-            {
+            {	
                 try 
                 {
-                    connectionSock = ssocket.accept();
+                	//Check how many open connections we have on the server, if 50, send 503 service unavailable.
+                	if(count==50)
+                	{
+                		outToClient = new DataOutputStream(connectionSock.getOutputStream());
+
+                		outToClient.writeBytes("HTTP/1.0 503 Service Unavailable");
+
+                		outToClient.close();
+                		connectionSock.close();
+                	}
+                	else
+                	{
+                		connectionSock = ssocket.accept();
+                		count++;
+                		System.out.println("----------------------connected----------------------");
+                    	this.pool.execute(new Task(connectionSock));
+                    }
                 } 
                 catch (IOException e) 
                 {
@@ -96,39 +116,21 @@ class ThreadPoolServer implements Runnable{
                         break;
                     }
                 }
-                
-                //Check how many open connections we have on the server, if 50, send 503 service unavailable.
-                if(this.pool.getPoolSize()==50)
-                {
-                	DataOutputStream 	outToClient = null;
-                	try
-                	{
-                		outToClient = new DataOutputStream(connectionSock.getOutputStream());
-                		outToClient.writeBytes("HTTP/1.0 503 Service Unavailable");
-                		outToClient.close();
-                		connectionSock.close();
-                	}
-                	catch(IOException except)
-                	{
-                		System.out.println("Error: cannot support more than 50 connections." + except.getMessage());
-                	}
-                }
-                else
-                {
-                	System.out.println("----------------------connected----------------------");
-                	this.pool.execute(new Task(connectionSock));
-                }
-                
             }
+                
             //Close down the server.
             this.pool.shutdown();
-        try {
-            this.isDone = true;
-            ssocket.close();
-            return;
-        } catch (IOException except) {
-            System.out.println("Error while closing ssocket: " + except.getMessage());
-                return;        }
+            try 
+            {
+            	this.isDone = true;
+            	ssocket.close();
+            	return;
+            } 
+            catch (IOException except) 
+            {
+            	System.out.println("Error while closing ssocket: " + except.getMessage());
+                return;       
+            }
         
         }
     }
@@ -146,7 +148,7 @@ class Task implements Runnable {
         String clientUserAgent= null;
         String clientContentType = null;
         int clientContentLength = 0;
-        String payload = null;
+        Hashtable payload = null;
     
 
     public static final String 
@@ -179,6 +181,8 @@ class Task implements Runnable {
         Date 				modifiedSince = null;
         byte[] 				response = null;
         String 				headerResponse = null;
+        String[] 			postRequestHeaders = new String[2];
+        
         try {
 			//instantiate I/O streams and set connection timeout
             csocket.setSoTimeout(3000);
@@ -188,6 +192,10 @@ class Task implements Runnable {
             //read and parse a HTTP request from the client, send the response back
             request = inFromClient.readLine();
             requestHead = inFromClient.readLine();
+            
+            /*new code
+            
+            */
             
             for (String line = inFromClient.readLine(); line != null; line = inFromClient.readLine()) {
                 //parse the date from the If-Modified-Since header field.
@@ -213,12 +221,34 @@ class Task implements Runnable {
                 }
              
             }
-
-            if (inFromClient.readLine() != null && inFromClient.readLine().startsWith("From")) {
-
+            
+            
+            /*old code
+            parse the date from the If-Modified-Since header field.
+            if(requestHead != null && requestHead.startsWith("If-Modified-Since"))
+            {
+            	modifiedSince = parseRequestHead(requestHead);
+            }
+            else if (requestHead.startsWith("Content-Type:") || requestHead.startsWith("Content-Length:") )
+            {
+            	postRequestHeaders[0] = requestHead;
+            	String nextHeader = inFromClient.readLine();
+            	System.out.println(postRequestHeaders[0]);
+            	if (nextHeader.startsWith("Content-Type:") || nextHeader.startsWith("Content-Length:") )
+            	{
+            		postRequestHeaders[1] = nextHeader;
+            		System.out.println(postRequestHeaders[1]);
+            	}
             }
             
-            response = parseRequest(request, modifiedSince).getBytes();
+            
+            
+            */
+            
+            
+            
+            
+            response = parseRequest(request, modifiedSince, postRequestHeaders).getBytes();
             
             System.out.println(headerToSend);
             System.out.println(bodyToSend);
@@ -274,7 +304,7 @@ class Task implements Runnable {
     }
 
     //Parses the request and returns a response.
-    public String parseRequest(String request, Date modifiedSince) 
+    public String parseRequest(String request, Date modifiedSince, String[] postRequestHeaders) 
     {
         //Instantiate variables to be used for parsing the request and returning a correct response.
         String lineSeparator = "\r\n";
@@ -298,6 +328,8 @@ class Task implements Runnable {
             return "HTTP/1.0 400 Bad Request";
         }
         
+        
+        
         //Parse the Http version. 
         try 
         {
@@ -319,15 +351,18 @@ class Task implements Runnable {
             return "HTTP/1.0 501 Not Implemented";
         }
         
-        //Check for forbidden access
-        if (resource.startsWith("top_secret") || resource.contains("secret") || resource.contains("top_secret.txt")) {
-            return "HTTP/1.0 403 Forbidden";
+        if (resource.startsWith("top_secret") || resource.contains("secret") || resource.contains("top_secret.txt"))
+        {
+        	File mfile = new File("." + resource);
+        	if(!mfile.canRead())
+        	{
+        		return "HTTP/1.0 403 Forbidden";
+        	}
         }
-        
         /***************All formatting checks completed, code below this handles correctly formatted GET,POST, and HEAD HTTP requests.*******************/
         
-        //COMMAND is a valid GET OR POST (return header and body)
-        if ((command.equals("GET"))) 
+        //COMMAND is a valid GET
+        if (command.equals("GET")) 
         {
             //Declare Buffered reader to be instantiated in try/catch block.
             System.out.println("REQUEST = " + request);
@@ -353,6 +388,7 @@ class Task implements Runnable {
                 String response = addBody(header,byteString);
                 setHeader(header);
                 setBody(fileBytes);
+                System.out.println(response);
                 return response;
 
             } 
@@ -368,6 +404,8 @@ class Task implements Runnable {
             }
           
         }
+        
+        //Command is a valid POST
         if(command.equals("POST")){
             if(clientContentLength == 0){
                 return "HTTP/1.0 411 Length Required";
@@ -379,9 +417,43 @@ class Task implements Runnable {
                 return "HTTP/1.0 405 Method Not Allowed";
             }
             else{
-                /*TODO
-                parse post, send to cgi script with payload
-                */
+                
+        	//TODO If valid, decode the Post Request payload, set content-length variable, send decoded payload to CGI using STDIN
+                
+                //Set up env vars array
+                String environmentVars[] = new String[6];
+                environmentVars[0] = "CONTENT_LENGTH="+clientContentLength;
+                environmentVars[1] = "SCRIPT_NAME="+resource.replaceAll("[\\?]", "");
+                environmentVars[2] = "SERVER_NAME=localhost";
+                environmentVars[3] = "SERVER_PORT="+this.csocket.getPort();
+                environmentVars[4] = "HTTP_FROM="+client;
+                environmentVars[5] = "HTTP_USER_AGENT="+clientUserAgent;
+        	System.out.println("Command is a POST");
+        	
+                
+                try {
+                    //Attempt to pass to cgi? Unsure if this logic works
+                    Process process =  Runtime.getRuntime().exec(resource.replaceAll("[\\?]", ""),environmentVars);
+                    OutputStream stdin = process.getOutputStream();
+                    String[] params = new String [payload.size()];
+                    params = (String[])payload.entrySet().toArray();
+                    StringBuilder strBuilder = new StringBuilder();
+                    for (int i = 0; i < params.length; i++) {
+                        strBuilder.append(params[i]);
+                    }
+                    String newString = strBuilder.toString();
+                    byte[] param = newString.getBytes();
+                    stdin.write(param);
+                    /*
+                    TODO
+                        Then get STDOUT from process and append to response and return
+                    */
+                    
+                } catch (IOException ex) {
+                    Logger.getLogger(Task.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                
+                return "TODO - implement POST logic";
             }
         }
         // Command is a valid HEAD (return only header, no body)
@@ -436,21 +508,17 @@ class Task implements Runnable {
     			System.out.println("Error: " + except.getMessage());
     		}
     	}
-    		String lineSeparator = "\r\n";
     		
-    		if(lastModifiedGmt!=null && modSinceGmt!=null)
-    		{
-    			System.out.println("LastModified: "+lastModifiedGmt + '\n' + "ModifiedSince: " + modSinceGmt);
-    		}
+    	String lineSeparator = "\r\n";
     		
-    		if(modSinceGmtDate != null && lastModifiedDateGmt !=null)
-    		{
-    			//Check to see if file has been modified since the If-modifice-since header field. If yes, return error code.
-    			if(lastModifiedDateGmt.before(modSinceGmtDate) && !command.equals("HEAD"))
-    			{
-    				return "HTTP/1.0 304 Not Modified" + lineSeparator + "Expires: Tue, 20 Jul 2019 14:13:49 GMT" + lineSeparator;
-    			}
+    	if(modSinceGmtDate != null && lastModifiedDateGmt !=null)
+   		{
+   			//Check to see if file has been modified since the If-modifice-since header field. If yes, return error code.
+   			if(lastModifiedDateGmt.before(modSinceGmtDate) && !command.equals("HEAD"))
+   			{
+   				return "HTTP/1.0 304 Not Modified" + lineSeparator + "Expires: Tue, 20 Jul 2019 14:13:49 GMT" + lineSeparator;
     		}
+    	}
     	
     	//Header to be returned.
     	String input = ("HTTP/1.0 200 OK" 
@@ -522,14 +590,140 @@ class Task implements Runnable {
         } 
         return 0;
     }
-    private String parsePostPayloadHead(String str)
+    private Hashtable parsePostPayloadHead(String str)
     {
     	/*
         TODO:   payload decode
                 send payload to STDIN - cgi script
         */
-        return null;
+        
+        Hashtable cgiParams = new Hashtable();
+        int index = 0;
+ 
+      // get the first token scan for the '&' char
+      StringTokenizer stringToken = new StringTokenizer(str,"&");
+ 
+      while (stringToken.hasMoreTokens())
+      {
+       index++;
+       // Split the first token into Name and Value
+       StringTokenizer subToken = new StringTokenizer(stringToken.nextToken(),"=");
+ 
+       // Remove the '+' char from the Name
+       String name = plussesToSpaces(subToken.nextToken());
+ 
+       // Remove the '+' char from the Value
+       String value = plussesToSpaces(subToken.nextToken());
+ 
+       // Create the Keys to store the Name and the Values in the Hash Table
+       // the keys will be nam1e, value1, name2, value2 etc
+       String temp1= new String("variable"+index);
+       String temp2= new String("value"+index);
+ 
+       // Store the variables and the values in the Hash table
+       cgiParams.put(temp1,translateEscapes(name));
+       cgiParams.put(temp2,translateEscapes(value));
+                
+      }
+      return cgiParams;
+       
     }
+    
+    private String plussesToSpaces(String query_string)
+      {
+ 
+        // Substitute the '+' char to a blank char
+        return query_string.replace('+', ' ');
+ 
+      }
+ 
+   private String translateEscapes(String str)
+   {
+     int percent_sign = str.indexOf('%');
+     int ascii_val;
+     String next_escape=null;
+     String first_part=null;
+     String second_part=null;
+ 
+     while (percent_sign != -1)
+     {
+      next_escape = str.substring(percent_sign + 1, percent_sign + 3);
+      ascii_val = (16 * hexValue(next_escape.charAt(0)) + hexValue(next_escape.charAt(1)));
+      first_part = str.substring(0, percent_sign);
+      second_part = str.substring(percent_sign + 3, str.length());
+      str = first_part + (char)ascii_val + second_part;
+      percent_sign = str.indexOf('%', percent_sign + 1);
+     }
+     return str;
+   }
+    
+ 
+ 
+
+    private int hexValue(char c)
+       {
+       int rc;
+ 
+       switch(c)
+            {
+             case '1':
+                  rc = 1;
+                  break;
+             case '2':
+                  rc = 2;
+                  break;
+             case '3':
+                  rc = 3;
+                  break;
+             case '4':
+                  rc = 4;
+                  break;
+             case '5':
+                  rc = 5;
+                  break;
+             case '6':
+                  rc = 6;
+                  break;
+             case '7':
+                  rc = 7;
+                  break;
+             case '8':
+                  rc = 8;
+                  break;
+             case '9':
+                  rc = 9;
+                  break;
+             case 'a':
+             case 'A':
+                  rc = 10;
+                  break;
+             case 'b':
+             case 'B':
+                  rc = 11;
+                  break;
+             case 'c':
+             case 'C':
+                  rc = 12;
+                  break;
+             case 'd':
+             case 'D':
+                  rc = 13;
+                  break;
+             case 'e':
+             case 'E':
+                  rc = 14;
+                  break;
+             case 'f':
+             case 'F':
+                  rc = 15;
+                  break;
+             default:
+                  rc = 0;
+                  break;
+             }
+   return rc;
+   }
+    
     
     //Method that appends the body onto the header, and returns, the result.
     private String addBody(String input, String result)
