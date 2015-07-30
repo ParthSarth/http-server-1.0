@@ -142,6 +142,11 @@ class Task implements Runnable {
 	
 	public String headerToSend = null;
 	public byte[] bodyToSend = null;
+        String                  client = null;
+        String clientUserAgent= null;
+        String clientContentType = null;
+        int clientContentLength = 0;
+        String payload = null;
     
 
     public static final String 
@@ -154,7 +159,8 @@ class Task implements Runnable {
             MIME_PDF = "application/pdf",
             MIME_XGZIP = "application/x-gzip",
             MIME_ZIP = "application/zip",
-            MIME_OCTET_STREAM = "application/octet-stream";
+            MIME_OCTET_STREAM = "application/octet-stream",
+            MIME_WEB_FORM = "application/x-www-form-urlencoded";
 	
     //constructor which takes in the client socket to handle communication
     //to and from the client.
@@ -173,7 +179,6 @@ class Task implements Runnable {
         Date 				modifiedSince = null;
         byte[] 				response = null;
         String 				headerResponse = null;
-   
         try {
 			//instantiate I/O streams and set connection timeout
             csocket.setSoTimeout(3000);
@@ -184,10 +189,33 @@ class Task implements Runnable {
             request = inFromClient.readLine();
             requestHead = inFromClient.readLine();
             
-            //parse the date from the If-Modified-Since header field.
-            if(requestHead != null && requestHead.startsWith("If-Modified-Since"))
-            {
-            	modifiedSince = parseRequestHead(requestHead);
+            for (String line = inFromClient.readLine(); line != null; line = inFromClient.readLine()) {
+                //parse the date from the If-Modified-Since header field.
+                if (line.startsWith("If-Modified-Since")) {
+                    modifiedSince = parseRequestHead(line);
+                }
+            //It's a post request
+
+                if (line.startsWith("From")) {
+                    client = parsePostFromHead(line);
+                }
+                if (line.startsWith("User-Agent: ")) {
+                    clientUserAgent = parsePostUserAgentHead(line);
+                }
+                if (line.startsWith("Content-Type: ")) {
+                    clientContentType = parsePostContentTypeHead(line);
+                }
+                if (line.startsWith("Content-Length: ")) {
+                    clientContentLength = parsePostContentLengthHead(line);
+                }
+                else  {
+                    payload = parsePostPayloadHead(line);
+                }
+             
+            }
+
+            if (inFromClient.readLine() != null && inFromClient.readLine().startsWith("From")) {
+
             }
             
             response = parseRequest(request, modifiedSince).getBytes();
@@ -299,7 +327,7 @@ class Task implements Runnable {
         /***************All formatting checks completed, code below this handles correctly formatted GET,POST, and HEAD HTTP requests.*******************/
         
         //COMMAND is a valid GET OR POST (return header and body)
-        if ((command.equals("POST") || command.equals("GET"))) 
+        if ((command.equals("GET"))) 
         {
             //Declare Buffered reader to be instantiated in try/catch block.
             System.out.println("REQUEST = " + request);
@@ -340,7 +368,22 @@ class Task implements Runnable {
             }
           
         }
-        
+        if(command.equals("POST")){
+            if(clientContentLength == 0){
+                return "HTTP/1.0 411 Length Required";
+            }
+            if(clientContentType == null || !clientContentType.equalsIgnoreCase(MIME_WEB_FORM)){
+                return "HTTP/1.0 500 Internal Server Error";
+            }
+            if(!resource.contains(".cgi")){
+                return "HTTP/1.0 405 Method Not Allowed";
+            }
+            else{
+                /*TODO
+                parse post, send to cgi script with payload
+                */
+            }
+        }
         // Command is a valid HEAD (return only header, no body)
         if(command.equals("HEAD")) 
        	{
@@ -442,6 +485,50 @@ class Task implements Runnable {
     		return null;
     	}
     	return date;
+    }
+    
+    private String parsePostFromHead(String fromString)
+    {
+    	String clientName = fromString.substring(6);
+    	return clientName;
+    }
+    private String parsePostUserAgentHead(String str)
+    {
+        if( str!= null && str.startsWith("User-Agent: "))
+            {
+    	String userAgent = str.substring(12);
+    	return userAgent;
+            }
+        else return "err";
+    }
+    private String parsePostContentTypeHead(String str)
+    {
+        if (str != null && str.startsWith("Content-Type: ")) {
+            String contentType = str.substring(14);
+            if (contentType.equalsIgnoreCase(MIME_WEB_FORM)) {
+                return contentType;
+            } 
+        }
+        return "Internal Server Error";
+    }
+    private int parsePostContentLengthHead(String str)
+    {
+        if (str != null && str.startsWith("Content-Length: ")) {
+            String contentLength = str.substring(16);
+            if (contentLength.matches("\\d+")) {
+                int ct = Integer.parseInt(contentLength);
+                return ct;
+            }
+        } 
+        return 0;
+    }
+    private String parsePostPayloadHead(String str)
+    {
+    	/*
+        TODO:   payload decode
+                send payload to STDIN - cgi script
+        */
+        return null;
     }
     
     //Method that appends the body onto the header, and returns, the result.
