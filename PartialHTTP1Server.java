@@ -357,6 +357,45 @@ class Task implements Runnable {
     			}
     		}
     	}
+	
+	/**
+	   *
+	   * URL decode a string.<p>
+	   *
+	   * Data passed through the CGI API is URL encoded by the browser.
+	   * All spaces are turned into plus characters (+) and all "special"
+	   * characters are hex escaped into a %dd format (where dd is the hex
+	   * ASCII value that represents the original character).  You probably
+	   * won't ever need to call this routine directly; it is used by the
+	   * ReadParse method to decode the form data.
+	   *
+	   * @param in The string you wish to decode.
+	   *
+	   * @return The decoded string.
+	   *
+	   */
+
+	  public static String urlDecode(String in)
+	  {
+	      StringBuffer out = new StringBuffer(in.length());
+	      int i = 0;
+	      int j = 0;
+
+	      while (i < in.length())
+	      {
+	         char ch = in.charAt(i);
+	         i++;
+	         if (ch == '+') ch = ' ';
+	         else if (ch == '%')
+	         {
+	            ch = (char)Integer.parseInt(in.substring(i,i+2), 16);
+	            i+=2;
+	         }
+	         out.append(ch);
+	         j++;
+	      }
+	      return new String(out);
+	  }
     	//
 
 	
@@ -478,7 +517,7 @@ class Task implements Runnable {
             }
             else{
                 
-        	//TODO If valid, decode the Post Request payload, set content-length variable, send decoded payload to CGI using STDIN
+        	
                 
                 //Set up env vars array
                 String environmentVars[] = new String[6];
@@ -855,4 +894,3 @@ class Task implements Runnable {
     	return;
     }
 }
-
